@@ -14,7 +14,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
-# --- CONFIGURAÇÕES GERAIS ---
 SHOP_DOMAIN = "ks6pbe-qg.myshopify.com"
 API_VERSION = "2023-10"
 CLIENT_ID = "3f70d3e1b597b2c8fa0e0abcbbbd6e57"
@@ -23,14 +22,10 @@ REDIRECT_URI = "http://localhost:8000/callback"
 SCOPES = "write_orders,read_products"
 OUTPUT_FILE = ".shopify_offline_token.json"
 
-# --- CONFIGURAÇÕES DE PEDIDOS ---
 BASE_AMOUNT = "79.90"
 DOUBLE_AMOUNT = "159.80"
 
-# ==========================================
-# PARTE 1: AUTENTICAÇÃO E GERAÇÃO DE TOKEN
-# ==========================================
-
+# --- BLOCO DE AUTENTICAÇÃO (MANTIDO INTACTO) ---
 class CallbackHandler(BaseHTTPRequestHandler):
     server_version = "ShopifyOAuthLocal/1.0"
     def do_GET(self):
@@ -47,8 +42,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(f"<html><body><h2>{message}</h2></body></html>".encode("utf-8"))
         threading.Thread(target=self.server.shutdown, daemon=True).start()
-    def log_message(self, format, *args):
-        return
+    def log_message(self, format, *args): return
 
 def validate_hmac(params, client_secret):
     received_hmac = params.get("hmac", [""])[0]
@@ -73,25 +67,16 @@ def get_or_create_offline_token():
         try:
             with open(OUTPUT_FILE, "r", encoding="utf-8") as file:
                 data = json.load(file)
-                if "access_token" in data:
-                    print(f"Usando token offline ja existente de {OUTPUT_FILE}.")
-                    return data["access_token"]
-        except Exception as e:
-            print(f"Erro ao ler o token existente ({e})")
-
+                if "access_token" in data: return data["access_token"]
+        except Exception: pass
     if os.environ.get("GITHUB_ACTIONS") == "true":
-        print("ERRO CRÍTICO: Token não encontrado no GitHub Actions.")
-        print("Você precisa fazer o upload do arquivo .shopify_offline_token.json para o repositório!")
+        print("ERRO: Token não encontrado no GitHub Actions.")
         sys.exit(1)
-
     state = secrets.token_urlsafe(24)
-    auth_url = (f"https://{SHOP_DOMAIN}/admin/oauth/authorize?" + urlencode({
-        "client_id": CLIENT_ID, "scope": SCOPES, "redirect_uri": REDIRECT_URI, "state": state
-    }))
+    auth_url = (f"https://{SHOP_DOMAIN}/admin/oauth/authorize?" + urlencode({"client_id": CLIENT_ID, "scope": SCOPES, "redirect_uri": REDIRECT_URI, "state": state}))
     server = HTTPServer(("localhost", 8000), CallbackHandler)
     server.expected_state = state
     server.callback_params = None
-    print("Abrindo página de autorização do Shopify...")
     webbrowser.open(auth_url)
     server.serve_forever()
     params = server.callback_params or {}
@@ -100,17 +85,13 @@ def get_or_create_offline_token():
         json.dump(token_response, file, indent=2)
     return token_response.get("access_token")
 
-# ==========================================
-# PARTE 2: CRIAÇÃO DE PEDIDOS (API REST)
-# ==========================================
-
+# --- BLOCO DE CRIAÇÃO REST ---
 def rest_request(access_token, endpoint, payload):
     url = f"https://{SHOP_DOMAIN}/admin/api/{API_VERSION}/{endpoint}"
     body = json.dumps(payload).encode("utf-8")
     request = Request(url, data=body, method="POST", headers={"Content-Type": "application/json", "X-Shopify-Access-Token": access_token})
     try:
-        with urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode("utf-8"))
+        with urlopen(request, timeout=30) as response: return json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         print("Erro Shopify:", error.read().decode("utf-8"))
         return None
@@ -133,32 +114,35 @@ def create_paid_order(access_token):
     result = rest_request(access_token, "orders.json", payload)
     if result and "order" in result:
         order = result["order"]
-        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Pedido criado! [ID Local: {order_id} | Status: {order.get('financial_status')} | Total: R${order.get('total_price')}]")
-        return True
-    return False
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Pedido criado! [ID: {order_id} | Total: R${order.get('total_price')}]")
 
-# ==========================================
-# PARTE 3: CÁLCULO DE INTERVALO
-# ==========================================
+# --- CÁLCULO DE INTERVALO ---
 def calcular_intervalo_vendas():
-    hora_atual = datetime.datetime.now().hour
-    # Cálculos para a média de ~37 vendas/dia
+    agora = datetime.datetime.now()
+    hora_atual = agora.hour
+    dia_semana = agora.weekday()
+
     if 8 <= hora_atual <= 10 or 17 <= hora_atual <= 19:
-        return random.randint(800, 1200)
+        intervalo = random.randint(800, 1200)
     elif 11 <= hora_atual <= 16:
-        return random.randint(2000, 2800)
+        intervalo = random.randint(2000, 2800)
     else:
-        return random.randint(5000, 6500)
+        intervalo = random.randint(5000, 6500)
+
+    # +30% de volume aos finais de semana
+    if dia_semana >= 5:
+        intervalo = int(intervalo * 0.77)
+
+    return intervalo
 
 def main():
-    print("=== INICIANDO GERADOR DE VENDAS ===")
+    print("=== INICIANDO GERADOR DE VENDAS (+30% aos FDS) ===")
     access_token = get_or_create_offline_token()
     
     while True:
         create_paid_order(access_token)
         intervalo = calcular_intervalo_vendas()
-        minutos = round(intervalo / 60, 1)
-        print(f"-> Próxima venda sairá em {minutos} minutos (ou {intervalo} segundos)...\n")
+        print(f"-> Próxima venda sairá em {round(intervalo / 60, 1)} minutos...\n")
         time.sleep(intervalo)
 
 if __name__ == "__main__":
