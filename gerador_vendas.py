@@ -25,7 +25,9 @@ OUTPUT_FILE = ".shopify_offline_token.json"
 BASE_AMOUNT = "79.90"
 DOUBLE_AMOUNT = "159.80"
 
-# --- BLOCO DE AUTENTICAÇÃO (MANTIDO INTACTO) ---
+# ==========================================
+# BLOCO DE AUTENTICAÇÃO (MANTIDO INTACTO)
+# ==========================================
 class CallbackHandler(BaseHTTPRequestHandler):
     server_version = "ShopifyOAuthLocal/1.0"
     def do_GET(self):
@@ -85,7 +87,60 @@ def get_or_create_offline_token():
         json.dump(token_response, file, indent=2)
     return token_response.get("access_token")
 
-# --- BLOCO DE CRIAÇÃO REST ---
+
+# ==========================================
+# GERAÇÃO DE PERFIL AMERICANO REALISTA
+# ==========================================
+def gerar_perfil_americano():
+    try:
+        # Puxa uma identidade real aleatória dos EUA
+        req = Request("https://randomuser.me/api/?nat=us", headers={'User-Agent': 'Mozilla/5.0'})
+        with urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            user = data['results'][0]
+            
+            primeiro_nome = user['name']['first']
+            sobrenome = user['name']['last']
+            
+            # Formata um email que condiz com o nome
+            dominios = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"]
+            email = f"{primeiro_nome.lower()}.{sobrenome.lower()}{random.randint(10,999)}@{random.choice(dominios)}"
+            
+            # Dados geográficos americanos
+            endereco = f"{user['location']['street']['number']} {user['location']['street']['name'].title()}"
+            cidade = user['location']['city'].title()
+            estado = user['location']['state'].title()
+            cep = str(user['location']['postcode'])
+            telefone = f"+1{random.randint(200,999)}{random.randint(200,999)}{random.randint(1000,9999)}"
+            
+            # IP realista de provedores americanos
+            blocos_ip_eua = ['104', '107', '198', '64', '69', '50', '72', '73', '172']
+            ip_eua = f"{random.choice(blocos_ip_eua)}.{random.randint(10,250)}.{random.randint(10,250)}.{random.randint(10,250)}"
+            
+            return {
+                "first_name": primeiro_nome,
+                "last_name": sobrenome,
+                "email": email,
+                "address1": endereco,
+                "city": cidade,
+                "province": estado,
+                "zip": cep,
+                "phone": telefone,
+                "ip": ip_eua
+            }
+    except Exception as e:
+        # Fallback de segurança caso a API saia do ar momentaneamente
+        print(f"Aviso: Usando fallback de dados ({e})")
+        n = random.randint(10000, 99999)
+        return {
+            "first_name": "James", "last_name": f"Walker", "email": f"james.walker{n}@gmail.com",
+            "address1": f"{random.randint(100, 999)} Main Street", "city": "New York", 
+            "province": "New York", "zip": "10001", "phone": "+12125550199", "ip": "104.12.5.5"
+        }
+
+# ==========================================
+# CRIAÇÃO REST DA VENDA
+# ==========================================
 def rest_request(access_token, endpoint, payload):
     url = f"https://{SHOP_DOMAIN}/admin/api/{API_VERSION}/{endpoint}"
     body = json.dumps(payload).encode("utf-8")
@@ -97,26 +152,43 @@ def rest_request(access_token, endpoint, payload):
         return None
 
 def create_paid_order(access_token):
-    order_id = random.randint(10000, 99999)
     amount = DOUBLE_AMOUNT if random.random() < 0.2 else BASE_AMOUNT
+    perfil = gerar_perfil_americano()
     
     payload = {
         "order": {
-            "email": f"cliente-{order_id}@example.com",
+            "email": perfil["email"],
             "financial_status": "paid",
-            "browser_ip": f"177.{random.randint(10, 200)}.{random.randint(10, 200)}.{random.randint(10, 200)}", 
-            "line_items": [{"title": f"Produto Principal #{order_id}", "quantity": 1, "price": amount, "requires_shipping": True}],
+            "browser_ip": perfil["ip"], 
+            "line_items": [{"title": "Cast Iron Dutch Oven 5.5Qt", "quantity": 1, "price": amount, "requires_shipping": True}],
             "transactions": [{"kind": "sale", "status": "success", "amount": amount}],
-            "customer": {"first_name": "Cliente", "last_name": f"Teste {order_id}", "email": f"cliente-{order_id}@example.com"},
-            "shipping_address": {"first_name": "Cliente", "last_name": f"Teste {order_id}", "address1": "Rua Ficticia 123", "city": "São Paulo", "province": "SP", "country": "BR", "zip": "01000-000", "phone": "+5511999999999"}
+            "customer": {
+                "first_name": perfil["first_name"], 
+                "last_name": perfil["last_name"], 
+                "email": perfil["email"],
+                "phone": perfil["phone"]
+            },
+            "shipping_address": {
+                "first_name": perfil["first_name"], 
+                "last_name": perfil["last_name"], 
+                "address1": perfil["address1"], 
+                "city": perfil["city"], 
+                "province": perfil["province"], 
+                "country": "US", 
+                "zip": perfil["zip"], 
+                "phone": perfil["phone"]
+            }
         }
     }
     result = rest_request(access_token, "orders.json", payload)
     if result and "order" in result:
         order = result["order"]
-        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Pedido criado! [ID: {order_id} | Total: R${order.get('total_price')}]")
+        nome_completo = f"{perfil['first_name']} {perfil['last_name']}"
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Venda US gerada! | Cliente: {nome_completo} ({perfil['state']}) | Total: ${order.get('total_price')}")
 
-# --- CÁLCULO DE INTERVALO ---
+# ==========================================
+# CÁLCULO DE INTERVALO
+# ==========================================
 def calcular_intervalo_vendas():
     agora = datetime.datetime.now()
     hora_atual = agora.hour
@@ -136,7 +208,7 @@ def calcular_intervalo_vendas():
     return intervalo
 
 def main():
-    print("=== INICIANDO GERADOR DE VENDAS (+30% aos FDS) ===")
+    print("=== INICIANDO GERADOR DE VENDAS US (Nomes Reais Aleatórios) ===")
     access_token = get_or_create_offline_token()
     
     while True:
