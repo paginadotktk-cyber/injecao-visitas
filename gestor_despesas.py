@@ -10,7 +10,6 @@ SENHA = "Protonme@100"
 URL_GASTOS = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/gastos/?description=&category=all&dateOption=thisMonth"
 
 def limpar_valor_monetario(texto):
-    """Converte 'R$ 15.841,59' para float 15841.59"""
     if not texto: return 0.0
     texto_limpo = texto.replace('R$', '').replace('&nbsp;', '').replace('.', '').replace(',', '.').strip()
     try:
@@ -20,7 +19,6 @@ def limpar_valor_monetario(texto):
 
 async def gerenciar_gastos():
     async with async_playwright() as p:
-        # headless=True OBRIGATÓRIO para rodar na nuvem do GitHub (sem interface gráfica)
         browser = await p.chromium.launch(headless=True) 
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
@@ -30,22 +28,22 @@ async def gerenciar_gastos():
         try:
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando injeção de despesas...")
             
-            # 1. LOGIN (Atualizado com os novos seletores e URL)
+            # 1. LOGIN
             await page.goto("https://app.utmify.com.br/login/")
-            
-            # Aguarda até 30 segundos pelo campo de email (name="email")
             await page.wait_for_selector('input[name="email"]', timeout=30000)
             await page.fill('input[name="email"]', EMAIL)
             await page.fill('input[name="password"]', SENHA)
-            await page.click('button:has-text("Entrar")')
+            
+            # SIMULA A TECLA ENTER (Mais seguro que clicar no botão)
+            await page.keyboard.press('Enter')
             print(" -> Login realizado. Aguardando carregamento...")
             
             # 2. NAVEGAR PARA A ABA DE DESPESAS
-            await page.wait_for_timeout(8000) # Espera o painel autenticar com segurança
+            await page.wait_for_timeout(8000) 
             await page.goto(URL_GASTOS)
-            await page.wait_for_timeout(8000) # Espera o dashboard renderizar os números
+            await page.wait_for_timeout(8000) 
             
-            # 3. LEITURA DOS DADOS (FATURAMENTO E GASTO)
+            # 3. LEITURA DOS DADOS
             elementos_h2 = await page.locator('h2.fw-bolder.mb-1').all_inner_texts()
             
             texto_fat = elementos_h2[0] if len(elementos_h2) > 0 else "R$ 0,00"
@@ -72,7 +70,8 @@ async def gerenciar_gastos():
             if gasto_pendente > 10.00:
                 print(f" -> Injetando nova despesa de: R$ {gasto_pendente:.2f}")
                 
-                await page.click('button:has-text("Adicionar gasto")')
+                # Clicar no botão 'Adicionar gasto' usando um filtro mais inteligente do Playwright
+                await page.locator('button', has_text="Adicionar").first.click()
                 await page.wait_for_timeout(1500)
                 
                 await page.fill('#new-custom-spending-description', 'Custo Meta Ads')
@@ -84,7 +83,8 @@ async def gerenciar_gastos():
                 valor_formatado = f"{gasto_pendente:.2f}".replace('.', ',')
                 await page.fill('#custom-spending-value-input', valor_formatado)
                 
-                await page.click('button:has-text("Adicionar Despesa")')
+                # Simula ENTER dentro do campo de valor para salvar
+                await page.keyboard.press('Enter')
                 await page.wait_for_timeout(3000)
                 print(" -> ✅ Despesa salva com sucesso na UTMify!")
             else:
