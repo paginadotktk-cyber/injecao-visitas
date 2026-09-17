@@ -26,7 +26,7 @@ BASE_AMOUNT = "79.90"
 DOUBLE_AMOUNT = "159.80"
 
 # ==========================================
-# BLOCO DE AUTENTICAÇÃO (MANTIDO INTACTO)
+# BLOCO DE AUTENTICAÇÃO
 # ==========================================
 class CallbackHandler(BaseHTTPRequestHandler):
     server_version = "ShopifyOAuthLocal/1.0"
@@ -87,13 +87,31 @@ def get_or_create_offline_token():
         json.dump(token_response, file, indent=2)
     return token_response.get("access_token")
 
-
 # ==========================================
-# GERAÇÃO DE PERFIL AMERICANO REALISTA
+# GERAÇÃO DE PERFIL AMERICANO COM ZIP VALIDADO
 # ==========================================
 def gerar_perfil_americano():
+    # Lista de combinações Cidade/Estado/CEP reais para evitar bloqueio de fraude na Shopify
+    locais_validos = [
+        {"city": "New York", "province": "New York", "zip": "10001"},
+        {"city": "Los Angeles", "province": "California", "zip": "90001"},
+        {"city": "Chicago", "province": "Illinois", "zip": "60601"},
+        {"city": "Houston", "province": "Texas", "zip": "77001"},
+        {"city": "Miami", "province": "Florida", "zip": "33101"},
+        {"city": "Atlanta", "province": "Georgia", "zip": "30301"},
+        {"city": "Seattle", "province": "Washington", "zip": "98101"},
+        {"city": "Denver", "province": "Colorado", "zip": "80201"},
+        {"city": "Boston", "province": "Massachusetts", "zip": "02108"},
+        {"city": "Las Vegas", "province": "Nevada", "zip": "89101"},
+        {"city": "Orlando", "province": "Florida", "zip": "32801"},
+        {"city": "Dallas", "province": "Texas", "zip": "75201"},
+        {"city": "Phoenix", "province": "Arizona", "zip": "85001"},
+        {"city": "San Francisco", "province": "California", "zip": "94101"},
+        {"city": "Philadelphia", "province": "Pennsylvania", "zip": "19102"}
+    ]
+
     try:
-        # Puxa uma identidade real aleatória dos EUA
+        # Puxa APENAS o nome e sobrenome da API para manter o realismo humano
         req = Request("https://randomuser.me/api/?nat=us", headers={'User-Agent': 'Mozilla/5.0'})
         with urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
@@ -102,15 +120,16 @@ def gerar_perfil_americano():
             primeiro_nome = user['name']['first']
             sobrenome = user['name']['last']
             
-            # Formata um email que condiz com o nome
             dominios = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"]
             email = f"{primeiro_nome.lower()}.{sobrenome.lower()}{random.randint(10,999)}@{random.choice(dominios)}"
             
-            # Dados geográficos americanos
-            endereco = f"{user['location']['street']['number']} {user['location']['street']['name'].title()}"
-            cidade = user['location']['city'].title()
-            estado = user['location']['state'].title()
-            cep = str(user['location']['postcode'])
+            # Sorteia um local 100% validado
+            local = random.choice(locais_validos)
+            
+            # Gera um nome de rua aleatório
+            ruas = ["Main St", "Oak St", "Pine St", "Maple Ave", "Cedar Ln", "Washington St", "Park Ave", "Lakeview Dr"]
+            endereco = f"{random.randint(100, 9999)} {random.choice(ruas)}"
+            
             telefone = f"+1{random.randint(200,999)}{random.randint(200,999)}{random.randint(1000,9999)}"
             
             # IP realista de provedores americanos
@@ -122,20 +141,20 @@ def gerar_perfil_americano():
                 "last_name": sobrenome,
                 "email": email,
                 "address1": endereco,
-                "city": cidade,
-                "province": estado,
-                "zip": cep,
+                "city": local["city"],
+                "province": local["province"],
+                "zip": local["zip"],
                 "phone": telefone,
                 "ip": ip_eua
             }
     except Exception as e:
-        # Fallback de segurança caso a API saia do ar momentaneamente
         print(f"Aviso: Usando fallback de dados ({e})")
+        local = random.choice(locais_validos)
         n = random.randint(10000, 99999)
         return {
-            "first_name": "James", "last_name": f"Walker", "email": f"james.walker{n}@gmail.com",
-            "address1": f"{random.randint(100, 999)} Main Street", "city": "New York", 
-            "province": "New York", "zip": "10001", "phone": "+12125550199", "ip": "104.12.5.5"
+            "first_name": "James", "last_name": "Walker", "email": f"james.walker{n}@gmail.com",
+            "address1": f"{random.randint(100, 999)} Main Street", "city": local["city"], 
+            "province": local["province"], "zip": local["zip"], "phone": "+12125550199", "ip": "104.12.5.5"
         }
 
 # ==========================================
@@ -184,7 +203,7 @@ def create_paid_order(access_token):
     if result and "order" in result:
         order = result["order"]
         nome_completo = f"{perfil['first_name']} {perfil['last_name']}"
-        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Venda US gerada! | Cliente: {nome_completo} ({perfil['state']}) | Total: ${order.get('total_price')}")
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Venda US gerada! | Cliente: {nome_completo} ({perfil['province']} - {perfil['zip']}) | Total: ${order.get('total_price')}")
 
 # ==========================================
 # CÁLCULO DE INTERVALO
@@ -201,14 +220,13 @@ def calcular_intervalo_vendas():
     else:
         intervalo = random.randint(5000, 6500)
 
-    # +30% de volume aos finais de semana
     if dia_semana >= 5:
         intervalo = int(intervalo * 0.77)
 
     return intervalo
 
 def main():
-    print("=== INICIANDO GERADOR DE VENDAS US (Nomes Reais Aleatórios) ===")
+    print("=== INICIANDO GERADOR DE VENDAS US (CEP VALIDADO) ===")
     access_token = get_or_create_offline_token()
     
     while True:
