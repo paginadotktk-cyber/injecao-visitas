@@ -34,14 +34,27 @@ async def gerenciar_gastos():
             await page.fill('input[name="email"]', EMAIL)
             await page.fill('input[name="password"]', SENHA)
             
-            # SIMULA A TECLA ENTER (Mais seguro que clicar no botão)
             await page.keyboard.press('Enter')
-            print(" -> Login realizado. Aguardando carregamento...")
+            print(" -> Login realizado. Aguardando pop-up de 2FA...")
+            
+            # FECHAR POP-UP DE 2FA
+            try:
+                botao_2fa = page.locator('button:has-text("Agora não")')
+                # Espera até 12 segundos pelo pop-up, já que ele demora uns 8s
+                await botao_2fa.wait_for(state="visible", timeout=12000)
+                await botao_2fa.click()
+                print(" -> Pop-up de 2FA fechado com sucesso.")
+            except Exception:
+                print(" -> Nenhum pop-up detectado ou já estava fechado.")
             
             # 2. NAVEGAR PARA A ABA DE DESPESAS
-            await page.wait_for_timeout(8000) 
+            print(" -> Navegando para a aba de despesas...")
+            await page.wait_for_timeout(2000) 
             await page.goto(URL_GASTOS)
-            await page.wait_for_timeout(8000) 
+            
+            # Aguarda os elementos de valor renderizarem na tela
+            await page.wait_for_selector('h2.fw-bolder.mb-1', timeout=15000)
+            await page.wait_for_timeout(5000) # +5 segundinhos pro valor sair do 'R$ 0,00' se estiver carregando
             
             # 3. LEITURA DOS DADOS
             elementos_h2 = await page.locator('h2.fw-bolder.mb-1').all_inner_texts()
@@ -70,7 +83,6 @@ async def gerenciar_gastos():
             if gasto_pendente > 10.00:
                 print(f" -> Injetando nova despesa de: R$ {gasto_pendente:.2f}")
                 
-                # Clicar no botão 'Adicionar gasto' usando um filtro mais inteligente do Playwright
                 await page.locator('button', has_text="Adicionar").first.click()
                 await page.wait_for_timeout(1500)
                 
@@ -83,7 +95,6 @@ async def gerenciar_gastos():
                 valor_formatado = f"{gasto_pendente:.2f}".replace('.', ',')
                 await page.fill('#custom-spending-value-input', valor_formatado)
                 
-                # Simula ENTER dentro do campo de valor para salvar
                 await page.keyboard.press('Enter')
                 await page.wait_for_timeout(3000)
                 print(" -> ✅ Despesa salva com sucesso na UTMify!")
