@@ -30,16 +30,18 @@ async def gerenciar_gastos():
         try:
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando injeção de despesas...")
             
-            # 1. LOGIN
-            await page.goto("https://app.utmify.com.br/login")
-            await page.wait_for_selector('input[type="email"]', timeout=15000)
-            await page.fill('input[type="email"]', EMAIL)
-            await page.fill('input[type="password"]', SENHA)
-            await page.click('button[type="submit"]')
+            # 1. LOGIN (Atualizado com os novos seletores e URL)
+            await page.goto("https://app.utmify.com.br/login/")
+            
+            # Aguarda até 30 segundos pelo campo de email (name="email")
+            await page.wait_for_selector('input[name="email"]', timeout=30000)
+            await page.fill('input[name="email"]', EMAIL)
+            await page.fill('input[name="password"]', SENHA)
+            await page.click('button:has-text("Entrar")')
             print(" -> Login realizado. Aguardando carregamento...")
             
             # 2. NAVEGAR PARA A ABA DE DESPESAS
-            await page.wait_for_timeout(8000) # Espera 8s para o painel autenticar com segurança
+            await page.wait_for_timeout(8000) # Espera o painel autenticar com segurança
             await page.goto(URL_GASTOS)
             await page.wait_for_timeout(8000) # Espera o dashboard renderizar os números
             
