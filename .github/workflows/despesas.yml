@@ -1,27 +1,21 @@
-name: Gestor de Despesas UTMify
+name: Gestor UTMify (20 min)
 
 on:
   schedule:
-    # O GitHub vai acionar este robô automaticamente a cada 20 minutos
     - cron: '*/20 * * * *' 
-  workflow_dispatch: # Botão de Play Manual
+  workflow_dispatch:
 
 jobs:
   run-despesas:
     runs-on: ubuntu-latest
     steps:
-      - name: Baixar arquivos
-        uses: actions/checkout@v4
-      
-      - name: Configurar Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          
-      - name: Instalar Playwright e Dependências
+      - name: Instalar Playwright
         run: |
           pip install playwright
           playwright install chromium
-          
-      - name: Rodar Script de Gastos
+      - name: Injetar Gastos
         run: python gestor_despesas.py
