@@ -7,7 +7,8 @@ import datetime
 EMAIL = "paginadotktk@gmail.com"
 SENHA = "Protonme@100"
 
-URL_GASTOS = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/gastos/?description=&category=all&dateOption=thisMonth"
+URL_RESUMO = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/resumo/"
+URL_GASTOS = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/gastos"
 
 def limpar_valor_monetario(texto):
     if not texto: return 0.0
@@ -19,44 +20,42 @@ def limpar_valor_monetario(texto):
 
 async def gerenciar_gastos():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True) 
+        # HEADLESS=TRUE para rodar nos servidores invisíveis do GitHub
+        browser = await p.chromium.launch(headless=True)
         context = await browser.new_context(
+            viewport={'width': 1366, 'height': 768},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
         )
         page = await context.new_page()
         
         try:
-            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando injeção de despesas...")
+            print(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando robô UTMify (GitHub Edition)...")
             
             # 1. LOGIN
             await page.goto("https://app.utmify.com.br/login/")
-            await page.wait_for_selector('input[name="email"]', timeout=30000)
+            await page.wait_for_timeout(3000) 
+            
             await page.fill('input[name="email"]', EMAIL)
             await page.fill('input[name="password"]', SENHA)
-            
             await page.keyboard.press('Enter')
-            print(" -> Login realizado. Aguardando pop-up de 2FA...")
+            
+            print(" -> Login digitado. Aguardando carregamento...")
+            await page.wait_for_timeout(10000)
             
             # FECHAR POP-UP DE 2FA
             try:
                 botao_2fa = page.locator('button:has-text("Agora não")')
-                # Espera até 12 segundos pelo pop-up, já que ele demora uns 8s
-                await botao_2fa.wait_for(state="visible", timeout=12000)
-                await botao_2fa.click()
-                print(" -> Pop-up de 2FA fechado com sucesso.")
+                if await botao_2fa.is_visible():
+                    await botao_2fa.click()
+                    print(" -> Pop-up de 2FA fechado.")
             except Exception:
-                print(" -> Nenhum pop-up detectado ou já estava fechado.")
+                pass
             
-            # 2. NAVEGAR PARA A ABA DE DESPESAS
-            print(" -> Navegando para a aba de despesas...")
-            await page.wait_for_timeout(2000) 
-            await page.goto(URL_GASTOS)
+            # 2. LER DADOS NA ABA RESUMO
+            print(" -> Lendo faturamento na aba Resumo...")
+            await page.goto(URL_RESUMO)
+            await page.wait_for_timeout(10000) 
             
-            # Aguarda os elementos de valor renderizarem na tela
-            await page.wait_for_selector('h2.fw-bolder.mb-1', timeout=15000)
-            await page.wait_for_timeout(5000) # +5 segundinhos pro valor sair do 'R$ 0,00' se estiver carregando
-            
-            # 3. LEITURA DOS DADOS
             elementos_h2 = await page.locator('h2.fw-bolder.mb-1').all_inner_texts()
             
             texto_fat = elementos_h2[0] if len(elementos_h2) > 0 else "R$ 0,00"
@@ -69,43 +68,67 @@ async def gerenciar_gastos():
             print(f" -> Gasto Atual Lido: R$ {gasto_atual:.2f}")
             
             if faturamento_atual <= 0:
-                print(" -> Faturamento está zerado ou não carregou. Abortando operação.")
-                return
+                print(" -> AVISO: Faturamento zerado.")
 
-            # 4. CÁLCULO DO ROI
+            # 3. INTELIGÊNCIA DO ROI (Cálculo Dinâmico)
             roi_alvo = random.uniform(2.0, 3.0)
             gasto_ideal = faturamento_atual / roi_alvo
             gasto_pendente = gasto_ideal - gasto_atual
             
             print(f" -> ROI Alvo Sorteado: {roi_alvo:.2f}")
             
-            # 5. INJEÇÃO DO VALOR
-            if gasto_pendente > 10.00:
-                print(f" -> Injetando nova despesa de: R$ {gasto_pendente:.2f}")
-                
-                await page.locator('button', has_text="Adicionar").first.click()
-                await page.wait_for_timeout(1500)
-                
-                await page.fill('#new-custom-spending-description', 'Custo Meta Ads')
-                
-                await page.click('#select2-new-custom-spending-category-container')
-                await page.wait_for_timeout(500)
-                await page.click('li:has-text("Tráfego")')
-                
-                valor_formatado = f"{gasto_pendente:.2f}".replace('.', ',')
-                await page.fill('#custom-spending-value-input', valor_formatado)
-                
-                await page.keyboard.press('Enter')
-                await page.wait_for_timeout(3000)
-                print(" -> ✅ Despesa salva com sucesso na UTMify!")
+            # Se o faturamento NÃO subiu o suficiente, injeta entre 30 e 50 reais
+            if gasto_pendente <= 30.00:
+                gasto_pendente = random.uniform(30.00, 50.00)
+                print(f" -> Faturamento estável. Injetando Tráfego de Manutenção: R$ {gasto_pendente:.2f}")
             else:
-                print(" -> ⏸️ Nenhuma despesa injetada. O ROI já está dentro da margem.")
+                print(f" -> Faturamento subiu! Injetando Custo Ideal para ROI: R$ {gasto_pendente:.2f}")
+
+            # 4. INJEÇÃO NA ABA GASTOS
+            await page.goto(URL_GASTOS)
+            await page.wait_for_timeout(8000) 
+            
+            print(" -> Preenchendo formulário...")
+            await page.locator('button', has_text="Adicionar").first.click()
+            await page.wait_for_timeout(1500)
+            
+            await page.fill('#new-custom-spending-description', 'Custo Meta Ads')
+            
+            await page.click('#select2-new-custom-spending-category-container')
+            await page.wait_for_timeout(500)
+            await page.click('li:has-text("Tráfego")')
+
+            await page.click('#new-custom-spending-date') 
+            await page.wait_for_timeout(500) 
+            await page.locator('.flatpickr-day.today').first.click() 
+            await page.wait_for_timeout(500)
+            
+            valor_formatado = f"{gasto_pendente:.2f}".replace('.', ',')
+            await page.fill('#custom-spending-value-input', valor_formatado)
+            
+            print(" -> Clicando em Salvar...")
+            await page.locator('button', has_text="Adicionar Despesa").first.click()
+            
+            await page.wait_for_timeout(4000)
+            print(" -> Comando de salvar enviado!")
+
+            # 5. VALIDAÇÃO FINAL
+            print(" -> Checando se a despesa foi registrada no Resumo...")
+            await page.goto(URL_RESUMO)
+            await page.wait_for_timeout(10000) 
+            
+            elementos_ver = await page.locator('h2.fw-bolder.mb-1').all_inner_texts()
+            novo_gasto = limpar_valor_monetario(elementos_ver[1] if len(elementos_ver) > 1 else "R$ 0,00")
+            
+            if novo_gasto > gasto_atual:
+                print(f" -> ✅ SUCESSO! O gasto subiu para: R$ {novo_gasto:.2f}")
+            else:
+                print(" -> ⚠️ AVISO: O gasto não atualizou na tela de imediato.")
 
         except Exception as e:
-            print(f" -> ❌ Erro durante a automação: {e}")
+            print(f" -> ❌ Erro: {e}")
         finally:
             await browser.close()
 
 if __name__ == "__main__":
-    print("=== INICIANDO GESTOR DE ROI E DESPESAS UTMIFY ===")
     asyncio.run(gerenciar_gastos())
