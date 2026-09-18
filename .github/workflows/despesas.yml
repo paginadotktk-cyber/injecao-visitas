@@ -1,8 +1,9 @@
-name: Gestor UTMify (20 min)
+name: Gestor UTMify (24/7 Loop)
 
 on:
   schedule:
-    - cron: '*/20 * * * *' 
+    # O despertador agora só bate a cada 5 horas para reiniciar o motor
+    - cron: '0 */5 * * *' 
   workflow_dispatch:
 
 jobs:
