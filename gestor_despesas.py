@@ -29,7 +29,7 @@ async def gerenciar_gastos():
         page = await context.new_page()
         
         try:
-            print(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando robô UTMify (GitHub Edition)...")
+            print(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando injeção na UTMify...")
             
             # 1. LOGIN
             await page.goto("https://app.utmify.com.br/login/")
@@ -130,5 +130,23 @@ async def gerenciar_gastos():
         finally:
             await browser.close()
 
+async def main_loop():
+    # 15 ciclos de 20 minutos = 300 minutos (exatas 5 horas)
+    ciclos = 15
+    for i in range(ciclos):
+        print(f"\n==========================================")
+        print(f"=== INICIANDO CICLO {i+1} DE {ciclos} ===")
+        print(f"==========================================")
+        
+        # Roda a injeção
+        await gerenciar_gastos()
+        
+        # Se não for o último ciclo, ele entra em modo soneca por 20 minutos (1200 segundos)
+        if i < ciclos - 1:
+            print("\n -> Entrando em modo espera. Próxima leitura em exatos 20 minutos...")
+            await asyncio.sleep(1200) 
+            
+    print("\n✅ Lote de 5 horas finalizado com segurança para evitar ban do GitHub.")
+
 if __name__ == "__main__":
-    asyncio.run(gerenciar_gastos())
+    asyncio.run(main_loop())
