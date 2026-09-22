@@ -22,8 +22,8 @@ REDIRECT_URI = "http://localhost:8000/callback"
 SCOPES = "write_orders,read_products"
 OUTPUT_FILE = ".shopify_offline_token.json"
 
-BASE_AMOUNT = "79.90"
-DOUBLE_AMOUNT = "159.80"
+BASE_AMOUNT = "179.90"
+DOUBLE_AMOUNT = "259.80"
 
 # ==========================================
 # BLOCO DE AUTENTICAÇÃO
