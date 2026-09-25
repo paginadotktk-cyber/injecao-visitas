@@ -14,10 +14,10 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
-SHOP_DOMAIN = "ks6pbe-qg.myshopify.com"
+SHOP_DOMAIN = "8tgm0b-p3.myshopify.com"
 API_VERSION = "2023-10"
-CLIENT_ID = "3f70d3e1b597b2c8fa0e0abcbbbd6e57"
-CLIENT_SECRET = "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"
+CLIENT_ID = "d679b3a4b55f5f57b4518c851e7f15d3"
+CLIENT_SECRET = "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"
 REDIRECT_URI = "http://localhost:8000/callback"
 SCOPES = "write_orders,read_products"
 OUTPUT_FILE = ".shopify_offline_token.json"
