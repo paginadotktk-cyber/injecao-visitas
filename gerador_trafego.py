@@ -4,7 +4,7 @@ import random
 import datetime
 
 # --- CONFIGURAÇÕES DO PRODUTO E BOTÕES ---
-URL_PRODUTO = "https://get.mydealjoy.com/products/cast-iron-dutch-oven-5-5qt?variant=46227116654778&utm_source=organicjLj6aaaafdf72ad26a870c55498"
+URL_PRODUTO = "https://8tgm0b-p3.myshopify.com/products/tenis-masculino-azul"
 SELETOR_BOTAO_CARRINHO = 'button[name="add"]'
 SELETOR_BOTAO_CHECKOUT = '[name="checkout"]'
 
