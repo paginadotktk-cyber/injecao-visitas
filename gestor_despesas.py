@@ -71,7 +71,7 @@ async def gerenciar_gastos():
                 print(" -> AVISO: Faturamento zerado.")
 
             # 3. INTELIGÊNCIA DO ROI (Cálculo Dinâmico)
-            roi_alvo = random.uniform(2.0, 3.0)
+            roi_alvo = random.uniform(2.7, 3.9)
             gasto_ideal = faturamento_atual / roi_alvo
             gasto_pendente = gasto_ideal - gasto_atual
             
