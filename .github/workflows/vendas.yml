@@ -22,4 +22,5 @@ jobs:
         env:
           TZ: "America/Sao_Paulo" # Mantém os picos de horário sincronizados com o Brasil
         timeout-minutes: 300 # Tempo de vida da máquina antes do reset automático
-        run: python gerador_vendas.py
+        # O parâmetro -u força o print a aparecer em tempo real no log do GitHub Actions
+        run: python -u gerador_vendas.py
