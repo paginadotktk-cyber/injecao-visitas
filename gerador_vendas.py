@@ -91,7 +91,6 @@ def get_or_create_offline_token():
 # GERAÇÃO DE PERFIL AMERICANO COM ZIP VALIDADO
 # ==========================================
 def gerar_perfil_americano():
-    # Lista de combinações Cidade/Estado/CEP reais para evitar bloqueio de fraude na Shopify
     locais_validos = [
         {"city": "New York", "province": "New York", "zip": "10001"},
         {"city": "Los Angeles", "province": "California", "zip": "90001"},
@@ -111,7 +110,6 @@ def gerar_perfil_americano():
     ]
 
     try:
-        # Puxa APENAS o nome e sobrenome da API para manter o realismo humano
         req = Request("https://randomuser.me/api/?nat=us", headers={'User-Agent': 'Mozilla/5.0'})
         with urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode('utf-8'))
@@ -123,16 +121,13 @@ def gerar_perfil_americano():
             dominios = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"]
             email = f"{primeiro_nome.lower()}.{sobrenome.lower()}{random.randint(10,999)}@{random.choice(dominios)}"
             
-            # Sorteia um local 100% validado
             local = random.choice(locais_validos)
             
-            # Gera um nome de rua aleatório
             ruas = ["Main St", "Oak St", "Pine St", "Maple Ave", "Cedar Ln", "Washington St", "Park Ave", "Lakeview Dr"]
             endereco = f"{random.randint(100, 9999)} {random.choice(ruas)}"
             
             telefone = f"+1{random.randint(200,999)}{random.randint(200,999)}{random.randint(1000,9999)}"
             
-            # IP realista de provedores americanos
             blocos_ip_eua = ['104', '107', '198', '64', '69', '50', '72', '73', '172']
             ip_eua = f"{random.choice(blocos_ip_eua)}.{random.randint(10,250)}.{random.randint(10,250)}.{random.randint(10,250)}"
             
@@ -169,6 +164,9 @@ def rest_request(access_token, endpoint, payload):
     except HTTPError as error:
         print("Erro Shopify:", error.read().decode("utf-8"))
         return None
+    except Exception as e:
+        print(f"Erro de conexão com Shopify: {e}")
+        return None
 
 def create_paid_order(access_token):
     amount = DOUBLE_AMOUNT if random.random() < 0.2 else BASE_AMOUNT
@@ -204,6 +202,8 @@ def create_paid_order(access_token):
         order = result["order"]
         nome_completo = f"{perfil['first_name']} {perfil['last_name']}"
         print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Venda US gerada! | Cliente: {nome_completo} ({perfil['province']} - {perfil['zip']}) | Total: ${order.get('total_price')}")
+    else:
+        print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Falha ao registrar venda na Shopify.")
 
 # ==========================================
 # CÁLCULO DE INTERVALO
@@ -227,12 +227,21 @@ def calcular_intervalo_vendas():
 
 def main():
     print("=== INICIANDO GERADOR DE VENDAS US (CEP VALIDADO) ===")
+    sys.stdout.flush()
     access_token = get_or_create_offline_token()
     
     while True:
-        create_paid_order(access_token)
+        try:
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Tentando gerar venda...")
+            sys.stdout.flush()
+            create_paid_order(access_token)
+        except Exception as e:
+            print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] ERRO CRÍTICO no ciclo: {e}")
+            sys.stdout.flush()
+            
         intervalo = calcular_intervalo_vendas()
         print(f"-> Próxima venda sairá em {round(intervalo / 60, 1)} minutos...\n")
+        sys.stdout.flush()
         time.sleep(intervalo)
 
 if __name__ == "__main__":
