@@ -126,7 +126,9 @@ def gerar_perfil_americano():
             ruas = ["Main St", "Oak St", "Pine St", "Maple Ave", "Cedar Ln", "Washington St", "Park Ave", "Lakeview Dr"]
             endereco = f"{random.randint(100, 9999)} {random.choice(ruas)}"
             
-            telefone = f"+1{random.randint(200,999)}{random.randint(200,999)}{random.randint(1000,9999)}"
+            # CORREÇÃO: Utiliza apenas códigos de área americanos reais e válidos
+            area_codes = ["212", "310", "404", "305", "713", "206", "312", "702", "415", "617"]
+            telefone = f"+1{random.choice(area_codes)}{random.randint(200,999)}{random.randint(1000,9999)}"
             
             blocos_ip_eua = ['104', '107', '198', '64', '69', '50', '72', '73', '172']
             ip_eua = f"{random.choice(blocos_ip_eua)}.{random.randint(10,250)}.{random.randint(10,250)}.{random.randint(10,250)}"
@@ -230,7 +232,11 @@ def main():
     sys.stdout.flush()
     access_token = get_or_create_offline_token()
     
-    while True:
+    start_time = time.time()
+    # CORREÇÃO: Limita o script a 3h e 50 minutos para encerrar antes do limite do GitHub e sincronizar com o novo Cron
+    max_duration = (3 * 3600) + (50 * 60) 
+    
+    while (time.time() - start_time) < max_duration:
         try:
             print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Tentando gerar venda...")
             sys.stdout.flush()
@@ -240,9 +246,19 @@ def main():
             sys.stdout.flush()
             
         intervalo = calcular_intervalo_vendas()
+        
+        # Impede que um intervalo muito longo ultrapasse a janela de tempo restante
+        tempo_restante = max_duration - (time.time() - start_time)
+        if intervalo > tempo_restante:
+            print("-> O tempo restante da máquina não cobre o próximo intervalo. Encerrando ciclo atual.")
+            sys.stdout.flush()
+            break
+            
         print(f"-> Próxima venda sairá em {round(intervalo / 60, 1)} minutos...\n")
         sys.stdout.flush()
         time.sleep(intervalo)
+        
+    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] Máquina reiniciada com sucesso. Aguardando novo acionamento do GitHub Actions.")
 
 if __name__ == "__main__":
     main()
