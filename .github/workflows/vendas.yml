@@ -2,8 +2,8 @@ name: Gerador de Vendas 24/7
 
 on:
   schedule:
-    # Reinicia a máquina a cada 5 horas para driblar o limite de 6h do GitHub
-    - cron: '0 */5 * * *'
+    # Reinicia a máquina a cada 4 horas exatas (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+    - cron: '0 */4 * * *'
   workflow_dispatch: # Permite que você dê a partida manualmente
 
 jobs:
@@ -21,6 +21,7 @@ jobs:
       - name: Rodar Gerador de Vendas
         env:
           TZ: "America/Sao_Paulo" # Mantém os picos de horário sincronizados com o Brasil
-        timeout-minutes: 300 # Tempo de vida da máquina antes do reset automático
+        # Limita a vida da máquina para 4 horas (sincronizado com o script Python que finaliza em 3h50m)
+        timeout-minutes: 240
         # O parâmetro -u força o print a aparecer em tempo real no log do GitHub Actions
         run: python -u gerador_vendas.py
