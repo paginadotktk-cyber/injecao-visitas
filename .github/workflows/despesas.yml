@@ -19,4 +19,4 @@ jobs:
           pip install playwright
           playwright install chromium
       - name: Injetar Gastos
-        run: python gestor_despesas.py
+        run: python -u gestor_despesas.py
