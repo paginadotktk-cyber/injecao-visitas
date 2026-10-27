@@ -2,10 +2,13 @@ import asyncio
 from playwright.async_api import async_playwright
 import random
 import datetime
+import argparse
+import os
+import re
 
-# --- CREDENCIAIS ---
-EMAIL = "paginadotktk@gmail.com"
-SENHA = "Protonme@100"
+# Configure estas credenciais nos Secrets do GitHub Actions.
+EMAIL = os.environ.get("UTMIFY_EMAIL", "")
+SENHA = os.environ.get("UTMIFY_PASSWORD", "")
 
 URL_RESUMO = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/resumo/"
 URL_GASTOS = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/gastos"
@@ -18,7 +21,27 @@ def limpar_valor_monetario(texto):
     except ValueError:
         return 0.0
 
-async def gerenciar_gastos():
+async def aguardar_painel(page):
+    """Aceita o lembrete opcional de ativacao; nao contorna desafios de 2FA."""
+    await page.wait_for_url(
+        re.compile(r"https://app\.utmify\.com\.br/(?:ativar-2fa|dashboards)(?:/|\?|$)"),
+        timeout=60000,
+    )
+    if "/ativar-2fa" in page.url:
+        print(" -> Lembrete de ativação de 2FA encontrado.")
+        pular = page.get_by_role("button", name="Pular", exact=True)
+        await pular.wait_for(state="visible", timeout=30000)
+        # click aguarda automaticamente o fim da contagem regressiva e
+        # o botão ficar habilitado. Não usar force=True.
+        await pular.click(timeout=60000)
+    await page.wait_for_url(
+        re.compile(r"https://app\.utmify\.com\.br/dashboards/"),
+        timeout=60000,
+    )
+    print(" -> Acesso ao painel confirmado.")
+
+
+async def gerenciar_gastos(diagnostico=False):
     async with async_playwright() as p:
         # HEADLESS=TRUE para rodar nos servidores invisíveis do GitHub
         browser = await p.chromium.launch(headless=True)
@@ -32,25 +55,17 @@ async def gerenciar_gastos():
             print(f"\n[{datetime.datetime.now().strftime('%H:%M:%S')}] Iniciando injeção na UTMify...")
             
             # 1. LOGIN
-            await page.goto("https://app.utmify.com.br/login/")
-            await page.wait_for_timeout(3000) 
-            
-            await page.fill('input[name="email"]', EMAIL)
-            await page.fill('input[name="password"]', SENHA)
-            await page.keyboard.press('Enter')
-            
-            print(" -> Login digitado. Aguardando carregamento...")
-            await page.wait_for_timeout(10000)
-            
-            # FECHAR POP-UP DE 2FA
-            try:
-                botao_2fa = page.locator('button:has-text("Agora não")')
-                if await botao_2fa.is_visible():
-                    await botao_2fa.click()
-                    print(" -> Pop-up de 2FA fechado.")
-            except Exception:
-                pass
-            
+            await page.goto("https://app.utmify.com.br/login/", wait_until="domcontentloaded")
+            await page.locator('input[name="email"]').fill(EMAIL)
+            await page.locator('input[name="password"]').fill(SENHA)
+            await page.get_by_role("button", name="Entrar", exact=True).click()
+            print(" -> Login enviado. Aguardando painel ou lembrete de 2FA...")
+            await aguardar_painel(page)
+
+            if diagnostico:
+                print(" -> DIAGNÓSTICO OK: login e acesso ao painel confirmados. Nenhuma despesa adicionada.")
+                return
+
             # 2. LER DADOS NA ABA RESUMO
             print(" -> Lendo faturamento na aba Resumo...")
             await page.goto(URL_RESUMO)
@@ -126,11 +141,18 @@ async def gerenciar_gastos():
                 print(" -> ⚠️ AVISO: O gasto não atualizou na tela de imediato.")
 
         except Exception as e:
-            print(f" -> ❌ Erro: {e}")
+            print(f" -> ❌ Erro: {type(e).__name__}: {e}")
+            print(f" -> Página no momento da falha: {page.url}")
+            raise  # O GitHub Actions precisa receber uma saída de erro.
         finally:
             await browser.close()
 
-async def main_loop():
+async def main_loop(diagnostico=False):
+    if not EMAIL or not SENHA:
+        raise RuntimeError("Configure UTMIFY_EMAIL e UTMIFY_PASSWORD no ambiente/Secrets do GitHub.")
+    if diagnostico:
+        await gerenciar_gastos(diagnostico=True)
+        return
     # 15 ciclos de 20 minutos = 300 minutos (exatas 5 horas)
     ciclos = 15
     for i in range(ciclos):
@@ -149,4 +171,7 @@ async def main_loop():
     print("\n✅ Lote de 5 horas finalizado com segurança para evitar ban do GitHub.")
 
 if __name__ == "__main__":
-    asyncio.run(main_loop())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--diagnostico", action="store_true", help="Testa apenas o login, sem lançar despesas ou repetir ciclos.")
+    args = parser.parse_args()
+    asyncio.run(main_loop(diagnostico=args.diagnostico))
