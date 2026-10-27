@@ -1,8 +1,9 @@
 import asyncio
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 import random
 import datetime
 import re
+from zoneinfo import ZoneInfo
 
 # --- CREDENCIAIS ---
 EMAIL = "paginadotktk@gmail.com"
@@ -96,8 +97,13 @@ async def gerenciar_gastos():
             await page.goto(URL_GASTOS)
             await page.wait_for_timeout(8000) 
             
+            # Conferir e validar os lançamentos no período correto.
+            await page.locator('#select2-select-data-container').click()
+            await page.get_by_role('option', name='Hoje', exact=True).click()
+            await page.wait_for_url(re.compile(r'dateOption=today(?:&|$)'), timeout=30000)
+            await page.wait_for_timeout(1500)
             print(" -> Preenchendo formulário...")
-            await page.locator('button', has_text="Adicionar").first.click()
+            await page.get_by_role('button', name='Adicionar gasto', exact=True).click()
             await page.wait_for_timeout(1500)
             
             await page.fill('#new-custom-spending-description', 'Custo Meta Ads')
@@ -106,35 +112,46 @@ async def gerenciar_gastos():
             await page.wait_for_timeout(500)
             await page.click('li:has-text("Tráfego")')
 
-            await page.click('#new-custom-spending-date') 
-            await page.wait_for_timeout(500) 
-            await page.locator('.flatpickr-day.today').first.click() 
-            await page.wait_for_timeout(500)
-            
+            # Não usar .today.first(): a página marca também dias de outro mês.
+            data_hoje = datetime.datetime.now(ZoneInfo("America/Sao_Paulo")).date()
+            meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                     "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+            await page.locator('#new-custom-spending-date').click()
+            calendario = page.locator('.flatpickr-calendar.open')
+            await expect(calendario.get_by_role('spinbutton', name='Year', exact=True)).to_have_value(str(data_hoje.year))
+            await calendario.get_by_role('combobox', name='Month', exact=True).select_option(str(data_hoje.month - 1))
+            dia_exato = f"{meses[data_hoje.month - 1]} {data_hoje.day}, {data_hoje.year}"
+            await calendario.locator(f'.flatpickr-day[aria-label="{dia_exato}"]').click()
+            data_esperada = data_hoje.strftime('%d/%m/%Y')
+            await expect(page.locator('#new-custom-spending-date')).to_have_value(data_esperada)
+            print(f" -> Data conferida no formulário: {data_esperada}")
+
             valor_formatado = f"{gasto_pendente:.2f}".replace('.', ',')
             await page.fill('#custom-spending-value-input', valor_formatado)
             
+            valor_exibido = f"{gasto_pendente:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            await expect(page.locator('#custom-spending-value-input')).to_have_value(
+                re.compile(rf"R\$\s*{re.escape(valor_exibido)}")
+            )
+            registros = (page.get_by_role('row')
+                .filter(has_text=data_esperada)
+                .filter(has_text='Custo Meta Ads')
+                .filter(has_text=re.compile(rf"R\$\s*{re.escape(valor_exibido)}(?:\s|$)")))
+            quantidade_antes = await registros.count()
             print(" -> Clicando em Salvar...")
-            await page.locator('button', has_text="Adicionar Despesa").first.click()
-            
-            await page.wait_for_timeout(4000)
-            print(" -> Comando de salvar enviado!")
-
-            # 5. VALIDAÇÃO FINAL
-            print(" -> Checando se a despesa foi registrada no Resumo...")
-            await page.goto(URL_RESUMO)
-            await page.wait_for_timeout(10000) 
-            
-            elementos_ver = await page.locator('h2.fw-bolder.mb-1').all_inner_texts()
-            novo_gasto = limpar_valor_monetario(elementos_ver[1] if len(elementos_ver) > 1 else "R$ 0,00")
-            
-            if novo_gasto > gasto_atual:
-                print(f" -> ✅ SUCESSO! O gasto subiu para: R$ {novo_gasto:.2f}")
-            else:
-                print(" -> ⚠️ AVISO: O gasto não atualizou na tela de imediato.")
+            await page.get_by_role('dialog', name='Adicionar Despesa', exact=True).get_by_role(
+                'button', name='Adicionar Despesa', exact=True
+            ).click()
+            await expect(page.get_by_role('dialog', name='Adicionar Despesa', exact=True)).not_to_be_visible(timeout=30000)
+            await expect(registros).to_have_count(quantidade_antes + 1, timeout=30000)
+            print(" -> Registro apareceu na lista. Confirmando persistência...")
+            await page.reload(wait_until='domcontentloaded')
+            await expect(registros).to_have_count(quantidade_antes + 1, timeout=30000)
+            print(f" -> OK SUCESSO! Despesa de R$ {valor_exibido} registrada em {data_esperada} e confirmada após recarregar.")
 
         except Exception as e:
-            print(f" -> ❌ Erro: {e}")
+            print(f" -> ERRO Erro: {e}")
+            raise  # Interromper o lote se não for possível confirmar; evitar repetições incertas.
         finally:
             await browser.close()
 
@@ -154,7 +171,7 @@ async def main_loop():
             print("\n -> Entrando em modo espera. Próxima leitura em exatos 20 minutos...")
             await asyncio.sleep(1200) 
             
-    print("\n✅ Lote de 5 horas finalizado com segurança para evitar ban do GitHub.")
+    print("\nOK Lote de 5 horas finalizado com segurança para evitar ban do GitHub.")
 
 if __name__ == "__main__":
     asyncio.run(main_loop())
