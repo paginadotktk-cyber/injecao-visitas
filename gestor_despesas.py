@@ -6,8 +6,8 @@ import re
 from zoneinfo import ZoneInfo
 
 # --- CREDENCIAIS ---
-EMAIL = "paginadotktk@gmail.com"
-SENHA = "Protonme@100"
+EMAIL = "shamim413@uorak.com"
+SENHA = "Thalyta@100"
 
 URL_RESUMO = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/resumo/"
 URL_GASTOS = "https://app.utmify.com.br/dashboards/6aa0740478b7a717497138f6/gastos"
